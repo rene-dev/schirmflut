@@ -135,6 +135,9 @@ void capture_close(capture_ctx *ctx)
 
 #endif
 
+// tx buffer size
+#define BUFFER_SIZE 37000 //  1536 //65000 //  1536
+
 int main(int argc, char *argv[])
 {
 	// parameter stuff
@@ -152,7 +155,7 @@ int main(int argc, char *argv[])
 	capture_ctx capture;
 	capture_init(&capture);
 	printf("Capture resolution: %d %d\n", capture.w, capture.h);
-	uint8_t *out_data = malloc(out_w * out_h * 3);
+	uint8_t *out_data = malloc(out_w * out_h * 3 + BUFFER_SIZE);
 	float dx = capture.w / (float)out_w, dy = capture.h / (float)out_h;
 
 	// network stuff
@@ -185,11 +188,16 @@ int main(int argc, char *argv[])
 	}
 
 	// protocol stuff
-	uint8_t buffer[65000];
+	uint8_t buffer[BUFFER_SIZE];
 	uint16_t *header = (uint16_t*)buffer;
 	header[0] = 0;
 	header[2] = (uint16_t)out_w;
-	int lines_per_packet = (65000 - 6) / (out_w * 3);
+	int lines_per_packet = (BUFFER_SIZE - 6) / (out_w * 3);
+	if (out_h < lines_per_packet)
+		lines_per_packet = out_h;
+	
+	printf("Lines per packet: %d\n", lines_per_packet);
+	printf("Packet size: %d\n", 6 + lines_per_packet * out_w * 3);
 
 	while (42)
 	{
@@ -249,6 +257,7 @@ int main(int argc, char *argv[])
 			header[1] = (uint16_t)y;
 			memcpy(buffer + 6, out_data + 3 * y * out_w, 3 * lines_per_packet * out_w);
 			sendto(sockfd, (const char*)buffer, 6 + lines_per_packet * out_w * 3, 0, (struct sockaddr*)&serv_addr, sizeof(serv_addr));
+			usleep(12000);
 		}
 		//printf("Send:  %3dms\n\n", (clock() - start_send) * 1000 / CLOCKS_PER_SEC);
 	}
